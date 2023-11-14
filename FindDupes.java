@@ -44,6 +44,7 @@ public class FindDupes {
 
  private static final String DEFAULT_COMMENTS="\\s*[/*\\*#].*";
  private static final String DEFAULT_EXCLUDES=".*/(Main|Test|Test1|Test2|PURPOSE|TEST.ROOT|A)\\.java$";
+ private static int PORT=4812;
 
  public static void main(String... args) throws IOException {
         if (args.length == 0) {
@@ -57,6 +58,8 @@ public class FindDupes {
             System.err.println("  minimal similarity in percent with whitechars removed\n"
                              + "                                     --minws=NUMB");
             System.err.println("Note, that min/minws should be 0-100 inclusive. Bigger/higher will effectively exclude the method.");
+            System.err.println("  if false, similarity is case insensitive");
+            System.err.println("                                     --case=true/false");
             System.err.println("  file path filter regex             --fitler=EXPRES");
             System.err.println("  sources exclude list               --exclude=EXPRES");
             System.err.println("    exclude matching source files form run. Eg \""+DEFAULT_EXCLUDES+"\"");
@@ -68,6 +71,8 @@ public class FindDupes {
             System.err.println("    Default is 100 (100kb), which eats about 46GB ram and taks 5-8 minutes. Biggrer files ");
              System.err.println("  maximum filesize diff ratio        --maxratio=DOUBLE");
             System.err.println("    Default is 10. Unless target/n < source < target*N then comparison will be skipped. Processed after comment removal");
+            System.err.println("  port to get progress and info      --port[=EXPRES]");
+            System.err.println("    if enabled, it willreply pid@host time since lunch/eta; default port is " + PORT);
             System.err.println("everything not `-` starting  is considered as dir/file which  the CWD/first file/dir should be compared against");
             throw new RuntimeException(" one ore more args expected, got zero");
         }
