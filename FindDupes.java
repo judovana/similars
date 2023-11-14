@@ -18,11 +18,10 @@
   java -jar similars.jar
  * 
  */
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.IOException;
-import java.io.InputStreamReader;
-import java.io.PrintStream;
+import java.io.*;
+import java.net.*;
+import com.sun.net.httpserver.*;
+import java.lang.management.ManagementFactory;
 import java.nio.charset.Charset;
 import java.nio.charset.CharsetDecoder;
 import java.nio.charset.CodingErrorAction;
@@ -44,7 +43,9 @@ public class FindDupes {
 
  private static final String DEFAULT_COMMENTS="\\s*[/*\\*#].*";
  private static final String DEFAULT_EXCLUDES=".*/(Main|Test|Test1|Test2|PURPOSE|TEST.ROOT|A)\\.java$";
- private static int PORT=4812;
+ private static int port=-4812;
+ private static String lastEta="warming up";
+ private static String pidAndFriends="0@host";
 
  public static void main(String... args) throws IOException {
         if (args.length == 0) {
@@ -71,8 +72,8 @@ public class FindDupes {
             System.err.println("    Default is 100 (100kb), which eats about 46GB ram and taks 5-8 minutes. Biggrer files ");
              System.err.println("  maximum filesize diff ratio        --maxratio=DOUBLE");
             System.err.println("    Default is 10. Unless target/n < source < target*N then comparison will be skipped. Processed after comment removal");
-            System.err.println("  port to get progress and info      --port[=EXPRES]");
-            System.err.println("    if enabled, it willreply pid@host time since lunch/eta; default port is " + PORT);
+            System.err.println("  port to get progress and info      --port[=INTEGER]");
+            System.err.println("    if enabled, it willreply pid@host time since lunch/eta; default port is " + (-1*port));
             System.err.println("everything not `-` starting  is considered as dir/file which  the CWD/first file/dir should be compared against");
             throw new RuntimeException(" one ore more args expected, got zero");
         }
@@ -111,6 +112,13 @@ public class FindDupes {
                             blacklist = Pattern.compile(arg.split("=")[1]);
                         } else {
                             blacklist = Pattern.compile(DEFAULT_EXCLUDES);
+                        }
+                        break;
+                    case "-port":
+                        if (arg.contains("=")) {
+                            port = Integer.parseInt(arg.split("=")[1]);
+                        } else {
+                            port = -1*port;
                         }
                         break;
                     case "-eraser":
@@ -153,6 +161,13 @@ public class FindDupes {
         }
         if (compares.size() == 0) {
             throw new RuntimeException("Nothing to compare against! Add some dirs/files, or run without args for help.");
+        }
+        if (port>0) {
+            InetSocketAddress addr = new InetSocketAddress(port);
+            HttpServer server = HttpServer.create(addr, 0);
+            pidAndFriends = ManagementFactory.getRuntimeMXBean().getName();
+            server.createContext( "/", new RootHandler());  
+            server.start();
         }
         if (compares.size() > 1) {
             src = compares.get(0);
@@ -265,6 +280,9 @@ public class FindDupes {
                 }
                 for (Path to: finalCompares.get(x)) {
                     counter++;
+                    if (port>0) {
+                        lastEta=eta(started, counter, totalttoal);
+                    }
                     if (verbose) {
                         System.err.println(counter + "/" + totalttoal + " " + eta(started, counter, totalttoal) + " " + from.toFile().getAbsolutePath() + " x " + to.toFile().getAbsolutePath());
                     }
@@ -542,5 +560,20 @@ public class FindDupes {
             err.println("eraser: " + eraser);
             err.println("filter: " + filter);
             err.println("blacklist: " + blacklist);
+            if (port>0) {
+                err.println("server running: " + pidAndFriends);
+            }
         }
+    private static class RootHandler implements HttpHandler {
+        public void handle( HttpExchange exchange) throws IOException {
+            try {
+                Headers responseHeaders = exchange.getResponseHeaders();
+                responseHeaders.set( "Content-Type", "text/plain");
+                exchange.sendResponseHeaders( 200, 0);
+                PrintStream response = new PrintStream( exchange.getResponseBody());
+                response.println(pidAndFriends + " " + lastEta);
+                response.close();
+            } catch (Exception ex){ex.printStackTrace();};
+       }
+    }
 }
