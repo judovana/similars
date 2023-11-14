@@ -12,10 +12,10 @@
  * TODO - for big files, repalce current 2D-array fast solution, by recursive slow solution :D
  * <p>
  * build:
- * javac -source 8 -target 8 *.java
- * jar cfe similars.jar FindDupes *.class
- * rm *.class
- * java -jar similars.jar
+  javac -source 8 -target 8 *.java
+  jar cfe similars.jar FindDupes *.class
+  rm *.class
+  java -jar similars.jar
  */
 
 import java.io.*;
