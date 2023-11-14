@@ -70,10 +70,11 @@ public class FindDupes {
             System.err.println("  will add html table to stdout      --html");
             System.err.println("  maximum filesize in KB             --maxsize=NUMBER");
             System.err.println("    Default is 100 (100kb), which eats about 46GB ram and taks 5-8 minutes. Biggrer files ");
+            System.err.println("  minumum filesize in B. Default 10  --minsize=NUMBER");
             System.err.println("  maximum filesize diff ratio        --maxratio=DOUBLE");
             System.err.println("    Default is 10. Unless target/n < source < target*N then comparison will be skipped. Processed after comment removal");
             System.err.println("  port to get progress and info      --port[=INTEGER]");
-            System.err.println("    if enabled, it willreply pid@host time since lunch/eta; default port is " + (-1*port));
+            System.err.println("    if enabled, it will reply pid@host time since lunch/eta; default port is " + (-1*port)+". The server will block program from exit.");
             System.err.println("everything not `-` starting  is considered as dir/file which  the CWD/first file/dir should be compared against");
             throw new RuntimeException(" one ore more args expected, got zero");
         }
@@ -106,6 +107,9 @@ public class FindDupes {
                     case "-maxsize":
                         maxsize = Integer.parseInt(arg.split("=")[1])*1024;
                         break;
+                    case "-minsize":
+                        minsize = Integer.parseInt(arg.split("=")[1]);
+                        break;
                     case "-filter":
                         filter = Pattern.compile(arg.split("=")[1]);
                         break;
@@ -114,6 +118,13 @@ public class FindDupes {
                             blacklist = Pattern.compile(arg.split("=")[1]);
                         } else {
                             blacklist = Pattern.compile(DEFAULT_EXCLUDES);
+                        }
+                        break;
+                    case "-case":
+                        if (arg.contains("=")) {
+                            casesensitive = Boolean.parseBoolean(arg.split("=")[1]);
+                        } else {
+                            casesensitive = false;
                         }
                         break;
                     case "-port":
@@ -341,6 +352,10 @@ public class FindDupes {
                     if (content2 == null) {
                         continue;
                     }
+                    if (casesensitive == false) {
+                        content1 = content1.toLowerCase();
+                        content2 = content2.toLowerCase();
+                    }
                     if (verbose) {
                         System.err.print(" similarity: ");
                     }
@@ -557,12 +572,28 @@ public class FindDupes {
             return "(run " + tookTime/1000/60+"m/eta " + (int)(deta/1000/60)+"m)";
         }
 
+        public static String namesToStr(double names) {
+              if (names < -50d) {
+              //false, disanled
+              return "false - disabled";
+              }else if (names > -50d && names < -5d) {
+              //-10 same
+              return "true - identical";
+              } else if (names > -5d && names < 0d) {
+              //-1 sameignorecase
+              return "icase - identical, case ignored";
+              } else if (names > 0d) {
+              return names + " -  similar";
+              } else {
+                   throw new RuntimeException("Impossible value: " + names);
+              }
+        }
         public static void info(PrintStream err, double min, double minws, long maxsize, long minsize, double names, double maxratio, Pattern eraser, Pattern filter, Pattern blacklist, boolean casesensitive)  {
             err.println("min: " + min);
             err.println("minws: " + minws);
             err.println("maxsize: " + maxsize);
             err.println("minsize: " + minsize);
-            err.println("names: " + names);
+            err.println("names: " + namesToStr(names));
             err.println("maxratio: " + maxratio);
             err.println("eraser: " + eraser);
             err.println("case sensitive: " + casesensitive);
