@@ -1,26 +1,28 @@
 /**
  * eg:
- * java -Xmx46G -jar similars.jar  ./test/reproducers/1098399/GlyphBug.java git/jdk/test/jdk/java/lang/String/concat/ImplicitStringConcatShapes.java  --verbose 
+ * java -Xmx46G -jar similars.jar  ./test/reproducers/1098399/GlyphBug.java git/jdk/test/jdk/java/lang/String/concat/ImplicitStringConcatShapes.java  --verbose
  * java -Xmx50G -jar similars.jar  -verbose -html -names=80  -exclude -filter=".*(Main|Test).*\.java$"  git/test/ git/jdk8u-dev/ git/jdk11u-usptream/test git/jdk17u/test/ git/jdk/test/  2>log 1>results &
- *
+ * <p>
  * some of the jtreg test sources are pretty huge, with 30G some similarity search failed.
  * the 46GB of ram is ok for default 100kb limit on files. And already those takes about 5-8 minutes to comapre
  * I had tried also (ImplicitStringConcatShapes have 17000lines):
- * java -Xmx60G  FindDupes git/jdk/test/jdk/java/lang/String/concat/ImplicitStringConcatShapes.java  git/jdk/test/jdk/java/lang/String/concat/ImplicitStringConcatShapes.java  --verbose 
+ * java -Xmx60G  FindDupes git/jdk/test/jdk/java/lang/String/concat/ImplicitStringConcatShapes.java  git/jdk/test/jdk/java/lang/String/concat/ImplicitStringConcatShapes.java  --verbose
  * but it faiks after few seconds...
- *
+ * <p>
  * TODO - for big files, repalce current 2D-array fast solution, by recursive slow solution :D
- *
+ * <p>
  * build:
-  javac -source 8 -target 8 *.java
-  jar cfe similars.jar FindDupes *.class
-  rm *.class
-  java -jar similars.jar
- * 
+ * javac -source 8 -target 8 *.java
+ * jar cfe similars.jar FindDupes *.class
+ * rm *.class
+ * java -jar similars.jar
  */
+
 import java.io.*;
 import java.net.*;
+
 import com.sun.net.httpserver.*;
+
 import java.lang.management.ManagementFactory;
 import java.nio.charset.Charset;
 import java.nio.charset.CharsetDecoder;
@@ -41,29 +43,29 @@ import java.util.regex.Matcher;
 
 public class FindDupes {
 
- private static final String DEFAULT_COMMENTS="\\s*[/*\\*#].*";
- private static final String DEFAULT_EXCLUDES=".*/(Main|Test|Test1|Test2|PURPOSE|TEST.ROOT|A)\\.java$";
- private static int port=-4812;
- private static String lastEta="warming up";
- private static String pidAndFriends="0@host";
+    private static final String DEFAULT_COMMENTS = "\\s*[/*\\*#].*";
+    private static final String DEFAULT_EXCLUDES = ".*/(Main|Test|Test1|Test2|PURPOSE|TEST.ROOT|A)\\.java$";
+    private static int port = -4812;
+    private static String lastEta = "warming up";
+    private static String pidAndFriends = "0@host";
 
- public static void main(String... args) throws IOException {
+    public static void main(String... args) throws IOException {
         if (args.length == 0) {
             System.err.println("At least one argument necessary - directory/dir to comapre CWD agasint");
             System.err.println("In case of two and more argumetns, first is compared against all others (all file/dir,recursive)");
             System.err.println("Other understood args:");
             System.err.println("  will comapre only if filenames are same/similar\n"
-                             + "                                     --names=false/true/icase/NUMBER/");
+                    + "                                     --names=false/true/icase/NUMBER/");
             System.err.println("    false - not used, comapre all. true filenames must be same before comaprison. icase - like true, only9 case insensitive. NUMBER - names must be similar (percentages) ");
             System.err.println("  minimal similarity in percent      --min=NUMB");
             System.err.println("  minimal similarity in percent with whitechars removed\n"
-                             + "                                     --minws=NUMB");
+                    + "                                     --minws=NUMB");
             System.err.println("Note, that min/minws should be 0-100 inclusive. Bigger/higher will effectively exclude the method.");
             System.err.println("  if false, similarity is case insensitive");
             System.err.println("                                     --case=true/false");
             System.err.println("  file path filter regex             --fitler=EXPRES");
             System.err.println("  sources exclude list               --exclude=EXPRES");
-            System.err.println("    exclude matching source files form run. Eg \""+DEFAULT_EXCLUDES+"\"");
+            System.err.println("    exclude matching source files form run. Eg \"" + DEFAULT_EXCLUDES + "\"");
             System.err.println("  remove matching (comment?) lines   --eraser[=EXPRES]");
             System.err.println("    if enabled, default is " + DEFAULT_COMMENTS);
             System.err.println("  verbose mode                       --verbose");
@@ -74,7 +76,7 @@ public class FindDupes {
             System.err.println("  maximum filesize diff ratio        --maxratio=DOUBLE");
             System.err.println("    Default is 10. Unless target/n < source < target*N then comparison will be skipped. Processed after comment removal");
             System.err.println("  port to get progress and info      --port[=INTEGER]");
-            System.err.println("    if enabled, it will reply pid@host time since lunch/eta; default port is " + (-1*port)+". The server will block program from exit.");
+            System.err.println("    if enabled, it will reply pid@host time since lunch/eta; default port is " + (-1 * port) + ". The server will block program from exit.");
             System.err.println("everything not `-` starting  is considered as dir/file which  the CWD/first file/dir should be compared against");
             throw new RuntimeException(" one ore more args expected, got zero");
         }
@@ -87,10 +89,10 @@ public class FindDupes {
         double maxratio = 10;
         boolean verbose = false;
         boolean html = false;
-        long maxsize = 100*1024;    //100kb
+        long maxsize = 100 * 1024;    //100kb
         long minsize = 10;
         Pattern eraser = null;
-        boolean casesensitive=true;
+        boolean casesensitive = true;
         Pattern filter = Pattern.compile(".*");
         Pattern blacklist = null;
         for (String arg : args) {
@@ -105,7 +107,7 @@ public class FindDupes {
                         minws = Double.parseDouble(arg.split("=")[1]);
                         break;
                     case "-maxsize":
-                        maxsize = Integer.parseInt(arg.split("=")[1])*1024;
+                        maxsize = Integer.parseInt(arg.split("=")[1]) * 1024;
                         break;
                     case "-minsize":
                         minsize = Integer.parseInt(arg.split("=")[1]);
@@ -131,7 +133,7 @@ public class FindDupes {
                         if (arg.contains("=")) {
                             port = Integer.parseInt(arg.split("=")[1]);
                         } else {
-                            port = -1*port;
+                            port = -1 * port;
                         }
                         break;
                     case "-eraser":
@@ -142,13 +144,13 @@ public class FindDupes {
                         }
                         break;
                     case "-names":
-                        String value=arg.split("=")[1];
+                        String value = arg.split("=")[1];
                         if (value.equals("false")) {
-                            names=-100d;
+                            names = -100d;
                         } else if (value.equals("true")) {
-                            names=-10d;
+                            names = -10d;
                         } else if (value.equals("icase")) {
-                            names=-1d;
+                            names = -1d;
                         } else {
                             names = Double.parseDouble(value);
                         }
@@ -175,12 +177,12 @@ public class FindDupes {
         if (compares.size() == 0) {
             throw new RuntimeException("Nothing to compare against! Add some dirs/files, or run without args for help.");
         }
-        if (port>0) {
+        if (port > 0) {
             InetSocketAddress addr = new InetSocketAddress(port);
             HttpServer lserver = HttpServer.create(addr, 0);
             pidAndFriends = ManagementFactory.getRuntimeMXBean().getName();
             server = new RootHandler(min, minws, maxsize, minsize, names, maxratio, eraser, filter, blacklist, casesensitive);
-            lserver.createContext( "/", server);
+            lserver.createContext("/", server);
             lserver.start();
         }
         if (compares.size() > 1) {
@@ -235,22 +237,22 @@ public class FindDupes {
         if (html) {
             System.out.println("<html><head><style>");
             System.out.println("table, th, td {  border: 1px solid black;  border-collapse: collapse;}");
-            System.out.println("</style></head><body><h3>"+new Date()+"</h3><pre>");
+            System.out.println("</style></head><body><h3>" + new Date() + "</h3><pre>");
             info(System.out, min, minws, maxsize, minsize, names, maxratio, eraser, filter, blacklist, casesensitive);
             System.out.println("</pre><table><tr><td>");
-            System.out.println(src.getAbsolutePath()+"("+finalSrcs.size()+")");
+            System.out.println(src.getAbsolutePath() + "(" + finalSrcs.size() + ")");
             System.out.println("</td>");
             for (int x = 0; x < compares.size(); x++) {
                 File toinfo = compares.get(x);
                 finalCompares.get(x);
                 System.out.println("<td>");
-                System.out.println(toinfo.getAbsolutePath()+"("+finalCompares.get(x).size()+")");
+                System.out.println(toinfo.getAbsolutePath() + "(" + finalCompares.get(x).size() + ")");
                 System.out.println("</td>");
             }
             System.out.println("</tr>");
         }
-        Date started=new Date();
-        for (Path from:  finalSrcs) {
+        Date started = new Date();
+        for (Path from : finalSrcs) {
             firstPrinted = false;
             if (verbose) {
                 System.err.println("Started " + from.toFile().getAbsolutePath());
@@ -270,15 +272,15 @@ public class FindDupes {
                 if (!filter.matcher(from.toFile().getAbsolutePath()).matches()) {
                     throw new IOException("File do not match fitlering " + filter.toString());
                 }
-                if (blacklist !=null && blacklist.matcher(from.toFile().getAbsolutePath()).matches()) {
+                if (blacklist != null && blacklist.matcher(from.toFile().getAbsolutePath()).matches()) {
                     throw new IOException("Input is excluded by " + blacklist.toString());
                 }
                 content1 = Files.readString(from);
-                if (eraser!=null) {
+                if (eraser != null) {
                     Matcher matcher = eraser.matcher(content1);
                     content1 = matcher.replaceAll("");
                 }
-            } catch(Exception ex) {
+            } catch (Exception ex) {
                 skips++;
                 if (verbose) {
                     System.err.println("skipping " + from.toFile().getAbsolutePath() + " from binary? " + ex.getMessage());
@@ -290,16 +292,16 @@ public class FindDupes {
             for (int x = 0; x < compares.size(); x++) {
                 File toinfo = compares.get(x);
                 if (verbose) {
-                    System.err.println("Starting " +  toinfo.getAbsolutePath() + " hits: "+localhits+"|"+hits);
+                    System.err.println("Starting " + toinfo.getAbsolutePath() + " hits: " + localhits + "|" + hits);
                 }
-                for (Path to: finalCompares.get(x)) {
+                for (Path to : finalCompares.get(x)) {
                     counter++;
-                    if (port>0) {
-                        if (server!=null) {
+                    if (port > 0) {
+                        if (server != null) {
                             server.setHits(hits, localhits, skips, lskips, counter, totalttoal);
                             server.setTitle(from.toFile().getAbsolutePath() + " x " + to.toFile().getAbsolutePath());
                         }
-                        lastEta=eta(started, counter, totalttoal);
+                        lastEta = eta(started, counter, totalttoal);
                     }
                     if (verbose) {
                         System.err.println(counter + "/" + totalttoal + " " + eta(started, counter, totalttoal) + " " + from.toFile().getAbsolutePath() + " x " + to.toFile().getAbsolutePath());
@@ -327,23 +329,23 @@ public class FindDupes {
                             }
                         } else if (names > 0d) {
                             //0-100 levenstain
-                            PassWithResult filenamecompare = LevenshteinDistance.isDifferenceTolerable(from.getFileName().toString(), to.getFileName().toString(), names/100d, verbose, null);
+                            PassWithResult filenamecompare = LevenshteinDistance.isDifferenceTolerable(from.getFileName().toString(), to.getFileName().toString(), names / 100d, verbose, null);
                             if (!filenamecompare.pass) {
                                 throw new IOException("only similar filenames are supposed to be comapred by content. Limit is " + names);
                             }
                         }
                         content2 = Files.readString(to);
-                        if (eraser!=null) {
+                        if (eraser != null) {
                             Matcher matcher = eraser.matcher(content2);
                             content2 = matcher.replaceAll("");
                         }
-                        if ((double)(content2.length())/maxratio > (double)(content1.length())) {
-                            throw new IOException("content2 to big -  " + content2.length() + ">>"+content1.length());
+                        if ((double) (content2.length()) / maxratio > (double) (content1.length())) {
+                            throw new IOException("content2 to big -  " + content2.length() + ">>" + content1.length());
                         }
-                        if ((double)(content2.length())*maxratio < (double)(content1.length())) {
-                            throw new IOException("content2 to small -  " + content2.length() + "<<"+content1.length());
+                        if ((double) (content2.length()) * maxratio < (double) (content1.length())) {
+                            throw new IOException("content2 to small -  " + content2.length() + "<<" + content1.length());
                         }
-                    } catch(Exception ex) {
+                    } catch (Exception ex) {
                         lskips++;
                         if (verbose) {
                             System.err.println("skipping " + to.toFile().getAbsolutePath() + " to binary? " + ex.getMessage());
@@ -361,31 +363,31 @@ public class FindDupes {
                     }
                     PassWithResult compare1 = LevenshteinDistance.isDifferenceTolerable(content1, content2, min, verbose, lmaxmin);
                     if (lmaxmin[0] > maxmin[0]) {
-                        maxmin[0]=lmaxmin[0];
+                        maxmin[0] = lmaxmin[0];
                     }
                     if (compare1.pass) {
                         if (!firstPrinted) {
-                           firstPrinted = true;
-                           if (html) {
-                               System.out.println("<tr><td>");
-                           }
-                           System.out.println(from.toFile().getAbsolutePath());
-                           if (html) {
-                               System.out.println("</td>");
-                           }
+                            firstPrinted = true;
+                            if (html) {
+                                System.out.println("<tr><td>");
+                            }
+                            System.out.println(from.toFile().getAbsolutePath());
+                            if (html) {
+                                System.out.println("</td>");
+                            }
                         }
                         if (html && !closeTd) {
                             System.out.println("<td>");
                             closeTd = true;
                         }
-                        System.out.print("  " + compare1.percent+"%: ");
+                        System.out.print("  " + compare1.percent + "%: ");
                         System.out.println(" " + to.toFile().getAbsolutePath());
                         if (html) {
                             System.out.println("<br/>");
                         }
                         hits++;
                         localhits++;
-                        System.err.println(from.toFile().getAbsolutePath() + " == " + to.toFile().getAbsolutePath() + " hits: "+localhits+"|"+hits);
+                        System.err.println(from.toFile().getAbsolutePath() + " == " + to.toFile().getAbsolutePath() + " hits: " + localhits + "|" + hits);
                     } else {
                         if (verbose) {
                             System.err.print(" similarity without spaces: ");
@@ -393,9 +395,9 @@ public class FindDupes {
                         PassWithResult compare2 = LevenshteinDistance.isDifferenceTolerable(
                                 content1.replaceAll("\\s+", ""),
                                 content2.replaceAll("\\s+", ""),
-                                minws,verbose, lmaxminws);
+                                minws, verbose, lmaxminws);
                         if (lmaxminws[0] > maxminws[0]) {
-                            maxminws[0]=lmaxminws[0];
+                            maxminws[0] = lmaxminws[0];
                         }
                         if (compare2.pass) {
                             if (!firstPrinted) {
@@ -412,20 +414,22 @@ public class FindDupes {
                                 System.out.println("<td>");
                                 closeTd = true;
                             }
-                            System.out.print("  " + compare2.percent+"%: ");
+                            System.out.print("  " + compare2.percent + "%: ");
                             System.out.println(" " + to.toFile().getAbsolutePath());
                             if (html) {
                                 System.out.println("<br/>");
                             }
                             hits++;
                             localhits++;
-                            System.err.println(from.toFile().getAbsolutePath() + " == " + to.toFile().getAbsolutePath() + " hits: "+localhits+"|"+hits);
+                            System.err.println(from.toFile().getAbsolutePath() + " == " + to.toFile().getAbsolutePath() + " hits: " + localhits + "|" + hits);
                         }
                     }
                 }
                 if (closeTd) {
-                    if (html) { System.out.println("</td>"); }
-                    closeTd=false;
+                    if (html) {
+                        System.out.println("</td>");
+                    }
+                    closeTd = false;
                 } else {
                     if (firstPrinted && html) {
                         System.out.println("<td></td>");
@@ -433,15 +437,15 @@ public class FindDupes {
                 }
             }
             if (verbose) {
-                System.err.println("    Finished:"  + from.toFile().getAbsolutePath());
-                System.err.println("        hits:"  + localhits);
-                System.err.println("   bestmatch:"  + lmaxmin[0]);
-                System.err.println(" bestmatchws:"  + lmaxminws[0]);
-                System.err.println("       skips:"  + lskips);
-                System.err.println("                   hits total: "  + hits);
-                System.err.println("                  skips total: "  + skips);
-                System.err.println("   bestmatch all over session: "  + maxmin[0]);
-                System.err.println(" bestmatchws all over session: "  + maxminws[0]);
+                System.err.println("    Finished:" + from.toFile().getAbsolutePath());
+                System.err.println("        hits:" + localhits);
+                System.err.println("   bestmatch:" + lmaxmin[0]);
+                System.err.println(" bestmatchws:" + lmaxminws[0]);
+                System.err.println("       skips:" + lskips);
+                System.err.println("                   hits total: " + hits);
+                System.err.println("                  skips total: " + skips);
+                System.err.println("   bestmatch all over session: " + maxmin[0]);
+                System.err.println(" bestmatchws all over session: " + maxminws[0]);
             }
             if (firstPrinted && html) {
                 System.out.println("</tr>");
@@ -449,160 +453,163 @@ public class FindDupes {
         }
         if (html) {
             System.out.println("</table>");
-            System.out.println("<pre>"+new Date()+"</pre>");
+            System.out.println("<pre>" + new Date() + "</pre>");
             System.out.println("</body></html>");
         }
     }
 
-        private static class FilesToListVisitor implements FileVisitor<Path>  {
-            private final List<Path> list;
+    private static class FilesToListVisitor implements FileVisitor<Path> {
+        private final List<Path> list;
 
-            public FilesToListVisitor(List<Path> list) {
-                this.list = list;
-            }
-
-            @Override
-            public FileVisitResult preVisitDirectory(Path path, BasicFileAttributes basicFileAttributes) throws IOException {
-                return FileVisitResult.CONTINUE;
-            }
-
-            @Override
-            public FileVisitResult visitFile(Path path, BasicFileAttributes basicFileAttributes) throws IOException {
-                list.add(path);
-                return FileVisitResult.CONTINUE;
-            }
-
-            @Override
-            public FileVisitResult visitFileFailed(Path path, IOException e) throws IOException {
-                return FileVisitResult.CONTINUE;
-            }
-
-            @Override
-            public FileVisitResult postVisitDirectory(Path path, IOException e) throws IOException {
-                return FileVisitResult.CONTINUE;
-            }
+        public FilesToListVisitor(List<Path> list) {
+            this.list = list;
         }
 
-        public static final class LevenshteinDistance {
-            /**
-             * Calculates the Levenshtein distance between two strings.<br/>
-             * Uses a 2D array to represent individual changes, therefore the time complexity is quadratic
-             * (in reference to the strings' length).
-             *
-             * @param str1 the first string
-             * @param str2 the second string
-             * @return an integer representing the amount of atomic changes between {@code str1} and {@code str2}
-             */
-            public static int calculate(String str1, String str2) {
-                int[][] matrix = new int[str1.length() + 1][str2.length() + 1];
+        @Override
+        public FileVisitResult preVisitDirectory(Path path, BasicFileAttributes basicFileAttributes) throws IOException {
+            return FileVisitResult.CONTINUE;
+        }
 
-                for (int i = 0; i <= str1.length(); i++) {
-                    for (int j = 0; j <= str2.length(); j++) {
-                        if (i == 0) { // distance between "" and str2 == how long str2 is
-                            matrix[i][j] = j;
-                        } else if (j == 0) { // distance between str1 and "" == how long str1 is
-                            matrix[i][j] = i;
-                        } else {
-                            int substitution = matrix[i - 1][j - 1] + substitutionCost(str1.charAt(i - 1), str2.charAt(j - 1));
-                            int insertion = matrix[i][j - 1] + 1;
-                            int deletion = matrix[i - 1][j] + 1;
+        @Override
+        public FileVisitResult visitFile(Path path, BasicFileAttributes basicFileAttributes) throws IOException {
+            list.add(path);
+            return FileVisitResult.CONTINUE;
+        }
 
-                            matrix[i][j] = min3(substitution, insertion, deletion);
-                        }
-                    }
-                }
+        @Override
+        public FileVisitResult visitFileFailed(Path path, IOException e) throws IOException {
+            return FileVisitResult.CONTINUE;
+        }
 
-                return matrix[str1.length()][str2.length()]; // result is in the bottom-right corner
-            }
+        @Override
+        public FileVisitResult postVisitDirectory(Path path, IOException e) throws IOException {
+            return FileVisitResult.CONTINUE;
+        }
+    }
 
-            private static int substitutionCost(char a, char b) {
-                return (a == b) ? 0 : 1;
-            }
+    public static final class LevenshteinDistance {
+        /**
+         * Calculates the Levenshtein distance between two strings.<br/>
+         * Uses a 2D array to represent individual changes, therefore the time complexity is quadratic
+         * (in reference to the strings' length).
+         *
+         * @param str1 the first string
+         * @param str2 the second string
+         * @return an integer representing the amount of atomic changes between {@code str1} and {@code str2}
+         */
+        public static int calculate(String str1, String str2) {
+            int[][] matrix = new int[str1.length() + 1][str2.length() + 1];
 
-            private static int min3(int a, int b, int c) {
-                return Math.min(a, Math.min(b, c));
-            }
-
-            public static PassWithResult isDifferenceTolerable(String s1, String s2, double samenessPercentage,
-                    boolean verbose, int[] recorder) {
-                return isDifferenceTolerableImpl(samenessPercentage, LevenshteinDistance.calculate(s1, s2),
-                        Math.max(s1.length(), s2.length()), verbose, recorder);
-            }
-
-            public static PassWithResult isDifferenceTolerableImpl(double samenessPercentage, int actualChanges, int totalSize,
-                    boolean verbose, int[] recorder) {
-                double changesAllowed = (1.0 - samenessPercentage) * totalSize;
-                int percent=100-((actualChanges*100)/totalSize);
-                if (recorder!=null && percent>recorder[0]) {
-                    recorder[0]=percent;
-                }
-                if (verbose) {
-                    if (recorder!=null) {
-                        System.err.println(percent+"% ?> "+samenessPercentage*100 + "% (max:" + recorder[0] + ")");
+            for (int i = 0; i <= str1.length(); i++) {
+                for (int j = 0; j <= str2.length(); j++) {
+                    if (i == 0) { // distance between "" and str2 == how long str2 is
+                        matrix[i][j] = j;
+                    } else if (j == 0) { // distance between str1 and "" == how long str1 is
+                        matrix[i][j] = i;
                     } else {
-                        System.err.println(percent+"% ?> "+samenessPercentage*100);
+                        int substitution = matrix[i - 1][j - 1] + substitutionCost(str1.charAt(i - 1), str2.charAt(j - 1));
+                        int insertion = matrix[i][j - 1] + 1;
+                        int deletion = matrix[i - 1][j] + 1;
+
+                        matrix[i][j] = min3(substitution, insertion, deletion);
                     }
                 }
-                boolean result = actualChanges <= changesAllowed;
-                if (recorder!=null) {
-                    if (verbose){
-                        System.err.println("  " + percent+"%: ");
-                    }
-                } else if (verbose) {
-                    //nasty hack
-                    System.err.println(" name similarity " + percent+"%: ");
+            }
+
+            return matrix[str1.length()][str2.length()]; // result is in the bottom-right corner
+        }
+
+        private static int substitutionCost(char a, char b) {
+            return (a == b) ? 0 : 1;
+        }
+
+        private static int min3(int a, int b, int c) {
+            return Math.min(a, Math.min(b, c));
+        }
+
+        public static PassWithResult isDifferenceTolerable(String s1, String s2, double samenessPercentage,
+                                                           boolean verbose, int[] recorder) {
+            return isDifferenceTolerableImpl(samenessPercentage, LevenshteinDistance.calculate(s1, s2),
+                    Math.max(s1.length(), s2.length()), verbose, recorder);
+        }
+
+        public static PassWithResult isDifferenceTolerableImpl(double samenessPercentage, int actualChanges, int totalSize,
+                                                               boolean verbose, int[] recorder) {
+            double changesAllowed = (1.0 - samenessPercentage) * totalSize;
+            int percent = 100 - ((actualChanges * 100) / totalSize);
+            if (recorder != null && percent > recorder[0]) {
+                recorder[0] = percent;
+            }
+            if (verbose) {
+                if (recorder != null) {
+                    System.err.println(percent + "% ?> " + samenessPercentage * 100 + "% (max:" + recorder[0] + ")");
+                } else {
+                    System.err.println(percent + "% ?> " + samenessPercentage * 100);
                 }
-                return new PassWithResult(percent,result);
             }
-        }
-
-		public static class PassWithResult {
-            final int percent;
-            final boolean pass;
-            PassWithResult(int percent,boolean pass) {
-                this.percent=percent;
-                this.pass=pass;
+            boolean result = actualChanges <= changesAllowed;
+            if (recorder != null) {
+                if (verbose) {
+                    System.err.println("  " + percent + "%: ");
+                }
+            } else if (verbose) {
+                //nasty hack
+                System.err.println(" name similarity " + percent + "%: ");
             }
+            return new PassWithResult(percent, result);
         }
+    }
 
-        public static String eta(Date start, long counter, long total)  {
-            Date now = new Date();
-            long tookTime = now.getTime() - start.getTime();
-            double deta = (double)total/(double)counter*(double)tookTime;
-            return "(run " + tookTime/1000/60+"m/eta " + (int)(deta/1000/60)+"m)";
-        }
+    public static class PassWithResult {
+        final int percent;
+        final boolean pass;
 
-        public static String namesToStr(double names) {
-              if (names < -50d) {
-              //false, disanled
-              return "false - disabled";
-              }else if (names > -50d && names < -5d) {
-              //-10 same
-              return "true - identical";
-              } else if (names > -5d && names < 0d) {
-              //-1 sameignorecase
-              return "icase - identical, case ignored";
-              } else if (names > 0d) {
-              return names + " -  similar";
-              } else {
-                   throw new RuntimeException("Impossible value: " + names);
-              }
+        PassWithResult(int percent, boolean pass) {
+            this.percent = percent;
+            this.pass = pass;
         }
-        public static void info(PrintStream err, double min, double minws, long maxsize, long minsize, double names, double maxratio, Pattern eraser, Pattern filter, Pattern blacklist, boolean casesensitive)  {
-            err.println("min: " + min);
-            err.println("minws: " + minws);
-            err.println("maxsize: " + maxsize);
-            err.println("minsize: " + minsize);
-            err.println("names: " + namesToStr(names));
-            err.println("maxratio: " + maxratio);
-            err.println("eraser: " + eraser);
-            err.println("case sensitive: " + casesensitive);
-            err.println("filter: " + filter);
-            err.println("blacklist: " + blacklist);
-            if (port>0) {
-                err.println("server running: " + pidAndFriends+":"+port);
-            }
+    }
+
+    public static String eta(Date start, long counter, long total) {
+        Date now = new Date();
+        long tookTime = now.getTime() - start.getTime();
+        double deta = (double) total / (double) counter * (double) tookTime;
+        return "(run " + tookTime / 1000 / 60 + "m/eta " + (int) (deta / 1000 / 60) + "m)";
+    }
+
+    public static String namesToStr(double names) {
+        if (names < -50d) {
+            //false, disanled
+            return "false - disabled";
+        } else if (names > -50d && names < -5d) {
+            //-10 same
+            return "true - identical";
+        } else if (names > -5d && names < 0d) {
+            //-1 sameignorecase
+            return "icase - identical, case ignored";
+        } else if (names > 0d) {
+            return names + " -  similar";
+        } else {
+            throw new RuntimeException("Impossible value: " + names);
         }
+    }
+
+    public static void info(PrintStream err, double min, double minws, long maxsize, long minsize, double names, double maxratio, Pattern eraser, Pattern filter, Pattern blacklist, boolean casesensitive) {
+        err.println("min: " + min);
+        err.println("minws: " + minws);
+        err.println("maxsize: " + maxsize);
+        err.println("minsize: " + minsize);
+        err.println("names: " + namesToStr(names));
+        err.println("maxratio: " + maxratio);
+        err.println("eraser: " + eraser);
+        err.println("case sensitive: " + casesensitive);
+        err.println("filter: " + filter);
+        err.println("blacklist: " + blacklist);
+        if (port > 0) {
+            err.println("server running: " + pidAndFriends + ":" + port);
+        }
+    }
+
     private static class RootHandler implements HttpHandler {
         final double names;
         final double min;
@@ -615,30 +622,30 @@ public class FindDupes {
         final Pattern filter;
         final Pattern blacklist;
 
-        long hits=0;
-        long localhits=0;
-        long skipps=0;
-        long lskipps=0;
-        long done=0;
-        long total=0;
+        long hits = 0;
+        long localhits = 0;
+        long skipps = 0;
+        long lskipps = 0;
+        long done = 0;
+        long total = 0;
 
         String title = "counting...";
 
         RootHandler(double min, double minws, long maxsize, long minsize, double names, double maxratio, Pattern eraser, Pattern filter, Pattern blacklist, boolean casesensitive) {
-            this.min=min;
-            this.minws=minws;
-            this.maxsize=maxsize;
-            this.minsize=minsize;
-            this.names=names;
-            this.maxratio=maxratio;
-            this.eraser=eraser;
-            this.casesensitive=casesensitive;
-            this.filter=filter;
-            this.blacklist=blacklist;
+            this.min = min;
+            this.minws = minws;
+            this.maxsize = maxsize;
+            this.minsize = minsize;
+            this.names = names;
+            this.maxratio = maxratio;
+            this.eraser = eraser;
+            this.casesensitive = casesensitive;
+            this.filter = filter;
+            this.blacklist = blacklist;
         }
 
         public void setTitle(String title) {
-           this.title=title;
+            this.title = title;
         }
 
         public void setHits(long hits, long localhits, long skipps, long lskipps, long done, long total) {
@@ -650,19 +657,22 @@ public class FindDupes {
             this.total = total;
         }
 
-        public void handle( HttpExchange exchange) throws IOException {
+        public void handle(HttpExchange exchange) throws IOException {
             try {
                 Headers responseHeaders = exchange.getResponseHeaders();
-                responseHeaders.set( "Content-Type", "text/plain");
-                exchange.sendResponseHeaders( 200, 0);
-                PrintStream response = new PrintStream( exchange.getResponseBody());
+                responseHeaders.set("Content-Type", "text/plain");
+                exchange.sendResponseHeaders(200, 0);
+                PrintStream response = new PrintStream(exchange.getResponseBody());
                 info(response, min, minws, maxsize, minsize, names, maxratio, eraser, filter, blacklist, casesensitive);
                 response.println(title);
                 response.println("hits/localhits/skipped/lskipped/total/done");
-                response.println(hits+"/"+localhits+"/"+skipps+"/"+lskipps+"/"+total+"/"+done);
+                response.println(hits + "/" + localhits + "/" + skipps + "/" + lskipps + "/" + total + "/" + done);
                 response.println(lastEta);
                 response.close();
-            } catch (Exception ex){ex.printStackTrace();};
-       }
+            } catch (Exception ex) {
+                ex.printStackTrace();
+            }
+            ;
+        }
     }
 }
