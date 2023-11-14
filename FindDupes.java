@@ -70,13 +70,14 @@ public class FindDupes {
             System.err.println("  will add html table to stdout      --html");
             System.err.println("  maximum filesize in KB             --maxsize=NUMBER");
             System.err.println("    Default is 100 (100kb), which eats about 46GB ram and taks 5-8 minutes. Biggrer files ");
-             System.err.println("  maximum filesize diff ratio        --maxratio=DOUBLE");
+            System.err.println("  maximum filesize diff ratio        --maxratio=DOUBLE");
             System.err.println("    Default is 10. Unless target/n < source < target*N then comparison will be skipped. Processed after comment removal");
             System.err.println("  port to get progress and info      --port[=INTEGER]");
             System.err.println("    if enabled, it willreply pid@host time since lunch/eta; default port is " + (-1*port));
             System.err.println("everything not `-` starting  is considered as dir/file which  the CWD/first file/dir should be compared against");
             throw new RuntimeException(" one ore more args expected, got zero");
         }
+        RootHandler server = null;
         File src = null;
         List<File> compares = new ArrayList<>(args.length + 1);
         double names = -100;  //-100 off, --10  same, -1 sameignorecase, 0-100 levenstain
@@ -88,6 +89,7 @@ public class FindDupes {
         long maxsize = 100*1024;    //100kb
         long minsize = 10;
         Pattern eraser = null;
+        boolean casesensitive=true;
         Pattern filter = Pattern.compile(".*");
         Pattern blacklist = null;
         for (String arg : args) {
@@ -164,10 +166,11 @@ public class FindDupes {
         }
         if (port>0) {
             InetSocketAddress addr = new InetSocketAddress(port);
-            HttpServer server = HttpServer.create(addr, 0);
+            HttpServer lserver = HttpServer.create(addr, 0);
             pidAndFriends = ManagementFactory.getRuntimeMXBean().getName();
-            server.createContext( "/", new RootHandler());  
-            server.start();
+            server = new RootHandler(min, minws, maxsize, minsize, names, maxratio, eraser, filter, blacklist, casesensitive);
+            lserver.createContext( "/", server);
+            lserver.start();
         }
         if (compares.size() > 1) {
             src = compares.get(0);
@@ -180,7 +183,7 @@ public class FindDupes {
         long total = 0;
         List<Path> finalSrcs = new ArrayList<>();
         if (verbose) {
-            info(System.err, min, minws, maxsize, minsize, names, maxratio, eraser, filter, blacklist);
+            info(System.err, min, minws, maxsize, minsize, names, maxratio, eraser, filter, blacklist, casesensitive);
         }
         for (int i = 0; i < compares.size(); i++) {
             File comp = compares.get(i);
@@ -222,7 +225,7 @@ public class FindDupes {
             System.out.println("<html><head><style>");
             System.out.println("table, th, td {  border: 1px solid black;  border-collapse: collapse;}");
             System.out.println("</style></head><body><h3>"+new Date()+"</h3><pre>");
-            info(System.out, min, minws, maxsize, minsize, names, maxratio, eraser, filter, blacklist);
+            info(System.out, min, minws, maxsize, minsize, names, maxratio, eraser, filter, blacklist, casesensitive);
             System.out.println("</pre><table><tr><td>");
             System.out.println(src.getAbsolutePath()+"("+finalSrcs.size()+")");
             System.out.println("</td>");
@@ -281,6 +284,10 @@ public class FindDupes {
                 for (Path to: finalCompares.get(x)) {
                     counter++;
                     if (port>0) {
+                        if (server!=null) {
+                            server.setHits(hits, localhits, skips, lskips, counter, totalttoal);
+                            server.setTitle(from.toFile().getAbsolutePath() + " x " + to.toFile().getAbsolutePath());
+                        }
                         lastEta=eta(started, counter, totalttoal);
                     }
                     if (verbose) {
@@ -550,7 +557,7 @@ public class FindDupes {
             return "(run " + tookTime/1000/60+"m/eta " + (int)(deta/1000/60)+"m)";
         }
 
-        public static void info(PrintStream err, double min, double minws, long maxsize, long minsize, double names, double maxratio, Pattern eraser, Pattern filter, Pattern blacklist )  {
+        public static void info(PrintStream err, double min, double minws, long maxsize, long minsize, double names, double maxratio, Pattern eraser, Pattern filter, Pattern blacklist, boolean casesensitive)  {
             err.println("min: " + min);
             err.println("minws: " + minws);
             err.println("maxsize: " + maxsize);
@@ -558,20 +565,71 @@ public class FindDupes {
             err.println("names: " + names);
             err.println("maxratio: " + maxratio);
             err.println("eraser: " + eraser);
+            err.println("case sensitive: " + casesensitive);
             err.println("filter: " + filter);
             err.println("blacklist: " + blacklist);
             if (port>0) {
-                err.println("server running: " + pidAndFriends);
+                err.println("server running: " + pidAndFriends+":"+port);
             }
         }
     private static class RootHandler implements HttpHandler {
+        final double names;
+        final double min;
+        final double minws;
+        final double maxratio;
+        final long maxsize;
+        final long minsize;
+        final Pattern eraser;
+        final boolean casesensitive;
+        final Pattern filter;
+        final Pattern blacklist;
+
+        long hits=0;
+        long localhits=0;
+        long skipps=0;
+        long lskipps=0;
+        long done=0;
+        long total=0;
+
+        String title = "counting...";
+
+        RootHandler(double min, double minws, long maxsize, long minsize, double names, double maxratio, Pattern eraser, Pattern filter, Pattern blacklist, boolean casesensitive) {
+            this.min=min;
+            this.minws=minws;
+            this.maxsize=maxsize;
+            this.minsize=minsize;
+            this.names=names;
+            this.maxratio=maxratio;
+            this.eraser=eraser;
+            this.casesensitive=casesensitive;
+            this.filter=filter;
+            this.blacklist=blacklist;
+        }
+
+        public void setTitle(String title) {
+           this.title=title;
+        }
+
+        public void setHits(long hits, long localhits, long skipps, long lskipps, long done, long total) {
+            this.hits = hits;
+            this.localhits = localhits;
+            this.skipps = skipps;
+            this.lskipps = lskipps;
+            this.done = done;
+            this.total = total;
+        }
+
         public void handle( HttpExchange exchange) throws IOException {
             try {
                 Headers responseHeaders = exchange.getResponseHeaders();
                 responseHeaders.set( "Content-Type", "text/plain");
                 exchange.sendResponseHeaders( 200, 0);
                 PrintStream response = new PrintStream( exchange.getResponseBody());
-                response.println(pidAndFriends + " " + lastEta);
+                info(response, min, minws, maxsize, minsize, names, maxratio, eraser, filter, blacklist, casesensitive);
+                response.println(title);
+                response.println("hits/localhits/skipped/lskipped/total/done");
+                response.println(hits+"/"+localhits+"/"+skipps+"/"+lskipps+"/"+total+"/"+done);
+                response.println(lastEta);
                 response.close();
             } catch (Exception ex){ex.printStackTrace();};
        }
